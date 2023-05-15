@@ -1,0 +1,41 @@
+name: napari-microtubule-analyzer
+display_name: Microtubule Analyzer
+contributions:
+  commands:
+    - id: napari-microtubule-analyzer.get_reader
+      python_name: napari_microtubule_analyzer._reader:napari_get_reader
+      title: Open data with Microtubule Analyzer
+    - id: napari-microtubule-analyzer.write_multiple
+      python_name: napari_microtubule_analyzer._writer:write_multiple
+      title: Save multi-layer data with Microtubule Analyzer
+    - id: napari-microtubule-analyzer.write_single_image
+      python_name: napari_microtubule_analyzer._writer:write_single_image
+      title: Save image data with Microtubule Analyzer
+    - id: napari-microtubule-analyzer.make_qwidget
+      python_name: napari_microtubule_analyzer._widget:ExampleQWidget
+      title: Make example QWidget
+    - id: napari-microtubule-analyzer.make_magic_widget
+      python_name: napari_microtubule_analyzer._widget:example_magic_widget
+      title: Make example magic widget
+    - id: napari-microtubule-analyzer.make_func_widget
+      python_name: napari_microtubule_analyzer._widget:example_function_widget
+      title: Make example function widget
+  readers:
+    - command: napari-microtubule-analyzer.get_reader
+      accepts_directories: false
+      filename_patterns: ['*.npy']
+  writers:
+    - command: napari-microtubule-analyzer.write_multiple
+      layer_types: ['image*','labels*']
+      filename_extensions: []
+    - command: napari-microtubule-analyzer.write_single_image
+      layer_types: ['image']
+      filename_extensions: ['.npy']
+  widgets:
+    - command: napari-microtubule-analyzer.make_qwidget
+      display_name: Example QWidget
+    - command: napari-microtubule-analyzer.make_magic_widget
+      display_name: Example Magic Widget
+    - command: napari-microtubule-analyzer.make_func_widget
+      autogenerate: true
+      display_name: Example Function Widget
