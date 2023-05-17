@@ -1,0 +1,2 @@
+[napari.manifest]
+napari-microtubule-analyzer = napari_microtubule_analyzer:napari.yaml

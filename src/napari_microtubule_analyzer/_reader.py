@@ -6,7 +6,9 @@ implement multiple readers or even other plugin contributions. see:
 https://napari.org/stable/plugins/guides.html?#readers
 """
 import numpy as np
-
+import cv2 as cv
+import os
+import glob
 
 def napari_get_reader(path):
     """A basic implementation of a Reader contribution.
@@ -22,17 +24,15 @@ def napari_get_reader(path):
         If the path is a recognized format, return a function that accepts the
         same path or list of paths, and returns a list of layer data tuples.
     """
-    if isinstance(path, list):
-        # reader plugins may be handed single path, or a list of paths.
-        # if it is a list, it is assumed to be an image stack...
-        # so we are only going to look at the first file.
+    if isinstance(path, list) and path.endswith(('.tif', '.tiff', '.png')):
         path = path[0]
 
-    # if we know we cannot read the file, we immediately return None.
-    if not path.endswith(".npy"):
+    elif os.path.isdir(path):
+        pass
+
+    else:
         return None
 
-    # otherwise we return the *function* that can read ``path``.
     return reader_function
 
 
@@ -58,15 +58,19 @@ def reader_function(path):
         layer. Both "meta", and "layer_type" are optional. napari will
         default to layer_type=="image" if not provided
     """
-    # handle both a string and a list of strings
-    paths = [path] if isinstance(path, str) else path
-    # load all files into array
-    arrays = [np.load(_path) for _path in paths]
-    # stack arrays into single array
-    data = np.squeeze(np.stack(arrays))
 
-    # optional kwargs for the corresponding viewer.add_* method
-    add_kwargs = {}
+    if os.path.isdir(path):
+        _paths = glob.glob(os.path.join(path, '*.png')) + glob.glob(os.path.join(path, '*.tif')) + glob.glob(os.path.join(path, '*.tiff'))
+        array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in _paths]
+        data = np.squeeze(np.stack(array))
 
-    layer_type = "image"  # optional, default is "image"
+        add_kwargs = {"name": os.path.basename(path)}
+        layer_type = "image"
+    else:
+        paths = [path] if isinstance(path, str) else path
+        arrays = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in paths]
+        data = np.squeeze(np.stack(arrays))
+
+        add_kwargs = {}
+        layer_type = "image"
     return [(data, add_kwargs, layer_type)]
