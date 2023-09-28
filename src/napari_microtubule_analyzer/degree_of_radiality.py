@@ -325,74 +325,203 @@ def segment_and_separate_cells(img):
     img_labels = morphology.label(img_thresh)
 
     valid_cell_crops = []
+    place_holder_array = np.zeros_like(img_labels)
     for l in range(1, img_labels.max() + 1):
         # Discard cells that are touching image borders
         if not is_touching_img_border(img_labels == l):
             chull = morphology.convex_hull_image(img_labels == l)
+            place_holder_array = place_holder_array + chull * l
             valid_cell_crops.append(chull * img)
 
-    return valid_cell_crops
+    return valid_cell_crops, place_holder_array
 
 def segment_and_separate_cells_from_dir(im_stack):
     cell_crops = []
+    chull_list = []
     for im in tqdm(im_stack):
-        valid_cell_crops = segment_and_separate_cells(im)
+        # im = np.asarray(im)
+        valid_cell_crops, img_labels = segment_and_separate_cells(im)
         cell_crops = cell_crops + valid_cell_crops
+        chull_list.append(img_labels)
 
-    return cell_crops
+    return cell_crops, chull_list
 
-def compute_degree_of_radiality(im_stack: Image, num_of_slices: int):
+def apply_cell_segmentation(img, label):
+    # Binarize to ensure that connected components can be identified
+    img_thresh = label > 0
+    # Identify individual cells with connected components
+    img_labels = morphology.label(img_thresh)
+
+    valid_cell_crops = []
+    place_holder_array = np.zeros_like(img_labels)
+    for l in range(1, img_labels.max() + 1):
+        # Discard cells that are touching image borders
+        if not is_touching_img_border(img_labels == l):
+            chull = morphology.convex_hull_image(img_labels == l)
+            place_holder_array = place_holder_array + chull * l
+            valid_cell_crops.append(chull * img)
+
+    return valid_cell_crops, place_holder_array
+
+def apply_cell_segmentation_from_dir(im_stack, label_stack):
+    cell_crops = []
+    chull_list = []
+    for im, label in zip(tqdm(im_stack, label_stack)):
+        # im = np.asarray(im)
+        valid_cell_crops, img_labels = apply_cell_segmentation(im, label)
+        cell_crops = cell_crops + valid_cell_crops
+        chull_list.append(img_labels)
+
+    return cell_crops, chull_list
+
+def compute_degree_of_radiality(im_stack, label_stack, num_of_slices: int):
     dor_list = []
-    img_crops = segment_and_separate_cells_from_dir(im_stack)
+    stripwise_radial_im_list = []
+    strip_mask_list = []
+
+    if label_stack is None:
+        im_iterator = tqdm(im_stack)
+    else:
+        im_iterator = zip(tqdm(im_stack, label_stack))
+
+    for im_object in im_iterator:
+        cell_counter = 0
+        if label_stack is None:
+            im = im_object
+            cell_crops, img_labels = segment_and_separate_cells(im)
+        else:
+            im, label = im_object
+            cell_crops, img_labels = apply_cell_segmentation(im, label)
+
+        strip_mask = np.zeros_like(im)
+        for img in cell_crops:
+            cell_counter += 1
+            thresh = filters.threshold_otsu(img)
+            img_thresh = img > thresh
+            img_thresh = morphology.area_opening(img_thresh, area_threshold=150)
+            chull = convex_hull_image(img_thresh)
+            strip_mask_temp = np.zeros_like(img)
+            try:
+                contours = measure.find_contours(chull, 0.8)[0]
+                contours[:,0].max()
+                x_min = math.floor(contours[:,0].min())
+                x_max = math.ceil(contours[:,0].max())
+                y_min = math.floor(contours[:,1].min())
+                y_max = math.ceil(contours[:,1].max())
+
+                centre_of_mass = ndimage.center_of_mass(chull )
+                centre_of_mass = (centre_of_mass[1], centre_of_mass[0])
+
+                efd_recons = get_efd(img, chull, centre_of_mass, num_contours=num_of_slices, num_points=5000)
+                efd_recons.reverse()
+                vecs = get_vector_field(img, chull, (x_min, x_max), (y_min, y_max))
+
+                stripwise_dor = []
+                stripwise_radial_im = np.zeros_like(img)
+                img_strip_sum = np.zeros_like(img)
+
+                radial_im_full = np.zeros_like(img)
+                for i in range(1,len(efd_recons)):
+                    efd_recon_inner = efd_recons[i-1]
+                    efd_recon_outer = efd_recons[i]
+                    img_mask = get_area_mask(img.shape, efd_recon_outer, efd_recon_inner, centre_of_mass).astype('bool')
+
+                    img_strip = img * img_mask
+                    img_strip_sum += img_strip
+
+                    Z, radial_im = get_mean_abs_dot_product(centre_of_mass[0], centre_of_mass[1], img[x_min:x_max, y_min:y_max], vecs=vecs, chull=img_mask, x_range=(x_min, x_max), y_range=(y_min, y_max))
+                    radial_im[np.isnan(radial_im)] = 0
+
+                    radial_im_full[x_min:x_max, y_min:y_max] = radial_im * 255
+
+                    stripwise_dor.append(Z)
+                    stripwise_radial_im += radial_im_full
+
+                    strip_mask_temp += img_mask.astype('uint8') * i
+
+                stripwise_radial_im_list.append(stripwise_radial_im)
+                mse = np.mean(img_strip_sum - img * chull) ** 2
+
+                if (mse < 5) and not (True in [np.isnan(i) for i in stripwise_dor]):
+                    dor_list.append(stripwise_dor)
+                else:
+                    print('NA')
+            except IndexError:
+                print('No segmentation contours found for image. Ensure correct image segmentation')
+
+            strip_mask += strip_mask_temp
+
+        strip_mask_list.append(strip_mask)
+    # Return DoR as (im, slice, width, height)
+    # Output sections as labels layer with increasing value
+    return np.stack(dor_list), np.squeeze(np.stack(stripwise_radial_im_list)), np.stack(strip_mask_list)
+
+def compute_degree_of_radiality_deprecated(im_stack, label_stack, num_of_slices: int):
+    dor_list = []
+    if label_stack is None:
+        img_crops, chull_list = segment_and_separate_cells_from_dir(im_stack)
+    # Shoudl check label_stack is correct instance and throw error otherwise
+    else:
+        img_crops, chull_list = apply_cell_segmentation_from_dir(im_stack, label_stack)
 
     stripwise_radial_im_list = []
+    strip_mask_list = []
     for img in tqdm(img_crops):
         thresh = filters.threshold_otsu(img)
         img_thresh = img > thresh
         img_thresh = morphology.area_opening(img_thresh, area_threshold=150)
         chull = convex_hull_image(img_thresh)
-        contours = measure.find_contours(chull, 0.8)[0]
-        contours[:,0].max()
-        x_min = math.floor(contours[:,0].min())
-        x_max = math.ceil(contours[:,0].max())
-        y_min = math.floor(contours[:,1].min())
-        y_max = math.ceil(contours[:,1].max())
+        strip_mask = np.zeros_like(img)
+        try:
+            contours = measure.find_contours(chull, 0.8)[0]
+            contours[:,0].max()
+            x_min = math.floor(contours[:,0].min())
+            x_max = math.ceil(contours[:,0].max())
+            y_min = math.floor(contours[:,1].min())
+            y_max = math.ceil(contours[:,1].max())
 
-        centre_of_mass = ndimage.center_of_mass(chull )
-        centre_of_mass = (centre_of_mass[1], centre_of_mass[0])
+            centre_of_mass = ndimage.center_of_mass(chull )
+            centre_of_mass = (centre_of_mass[1], centre_of_mass[0])
 
-        efd_recons = get_efd(img, chull, centre_of_mass, num_contours=num_of_slices, num_points=5000)
-        efd_recons.reverse()
-        vecs = get_vector_field(img, chull, (x_min, x_max), (y_min, y_max))
+            efd_recons = get_efd(img, chull, centre_of_mass, num_contours=num_of_slices, num_points=5000)
+            efd_recons.reverse()
+            vecs = get_vector_field(img, chull, (x_min, x_max), (y_min, y_max))
 
-        stripwise_dor = []
-        stripwise_radial_im = np.zeros_like(img)
-        img_strip_sum = np.zeros_like(img)
+            stripwise_dor = []
+            stripwise_radial_im = np.zeros_like(img)
+            img_strip_sum = np.zeros_like(img)
 
-        radial_im_full = np.zeros_like(img)
-        for i in range(1,len(efd_recons)):
-            efd_recon_inner = efd_recons[i-1]
-            efd_recon_outer = efd_recons[i]
-            img_mask = get_area_mask(img.shape, efd_recon_outer, efd_recon_inner, centre_of_mass).astype('bool')
+            radial_im_full = np.zeros_like(img)
+            for i in range(1,len(efd_recons)):
+                efd_recon_inner = efd_recons[i-1]
+                efd_recon_outer = efd_recons[i]
+                img_mask = get_area_mask(img.shape, efd_recon_outer, efd_recon_inner, centre_of_mass).astype('bool')
 
-            img_strip = img * img_mask
-            img_strip_sum += img_strip
+                img_strip = img * img_mask
+                img_strip_sum += img_strip
 
-            Z, radial_im = get_mean_abs_dot_product(centre_of_mass[0], centre_of_mass[1], img[x_min:x_max, y_min:y_max], vecs=vecs, chull=img_mask, x_range=(x_min, x_max), y_range=(y_min, y_max))
-            radial_im[np.isnan(radial_im)] = 0
+                Z, radial_im = get_mean_abs_dot_product(centre_of_mass[0], centre_of_mass[1], img[x_min:x_max, y_min:y_max], vecs=vecs, chull=img_mask, x_range=(x_min, x_max), y_range=(y_min, y_max))
+                radial_im[np.isnan(radial_im)] = 0
 
-            radial_im_full[x_min:x_max, y_min:y_max] = radial_im * 255
+                radial_im_full[x_min:x_max, y_min:y_max] = radial_im * 255
 
-            stripwise_dor.append(Z)
-            stripwise_radial_im += radial_im_full
+                stripwise_dor.append(Z)
+                stripwise_radial_im += radial_im_full
 
-        stripwise_radial_im_list.append(stripwise_radial_im)
-        mse = np.mean(img_strip_sum - img * chull) ** 2
+                strip_mask += img_mask.astype('uint8') * i
 
-        if (mse < 5) and not (True in [np.isnan(i) for i in stripwise_dor]):
-            dor_list.append(stripwise_dor)
-        else:
-            print('NA')
+            stripwise_radial_im_list.append(stripwise_radial_im)
+            mse = np.mean(img_strip_sum - img * chull) ** 2
+
+            strip_mask_list.append(strip_mask)
+
+            if (mse < 5) and not (True in [np.isnan(i) for i in stripwise_dor]):
+                dor_list.append(stripwise_dor)
+            else:
+                print('NA')
+        except IndexError:
+            print('No segmentation contours found for image. Ensure correct image segmentation')
 
     # Return DoR as (im, slice, width, height)
-    return np.stack(dor_list), np.squeeze(np.stack(stripwise_radial_im_list))
+    # Output sections as labels layer with increasing value
+    return np.stack(dor_list), np.squeeze(np.stack(stripwise_radial_im_list)), np.stack(strip_mask_list)

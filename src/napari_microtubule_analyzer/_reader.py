@@ -64,7 +64,11 @@ def reader_function(path):
         array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in _paths]
         data = np.squeeze(np.stack(array))
 
+        # _path_dict =
+
+        # add_kwargs = {"name": os.path.basename(path), "metadata":}
         add_kwargs = {"name": os.path.basename(path)}
+
         layer_type = "image"
     else:
         paths = [path] if isinstance(path, str) else path
