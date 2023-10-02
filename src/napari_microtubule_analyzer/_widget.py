@@ -282,10 +282,10 @@ class RadialityPlotter(QWidget):
             std_dor = np.std(degree_of_radiality, axis=0)
 
             x = np.array([i for i in range(1, num_of_slices + 1)])
-
-            error = pg.ErrorBarItem(x=x, y=mean_dor, height=std_dor, beam=0.1, pen=color)
+            y = mean_dor
+            error = pg.ErrorBarItem(x=x, y=y, height=std_dor, beam=0.1, pen=color)
             self.graph.addItem(error)
-            self.graph.plot(x,y=mean_dor, pen=color, name=name)
+            self.graph.plot(x,y, pen=color, name=name)
 
     def _update_table(self, **kwargs):
         self.results_table.setColumnCount(self._max_slice_counter + 2)
