@@ -7,9 +7,25 @@ import numpy as np
 import os
 import csv
 import pyqtgraph as pg
-from qtpy.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSpinBox, QPushButton, QTableWidget, QTableWidgetItem, QFileDialog, QComboBox, QAbstractItemView, QCheckBox
+from qtpy.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
+                            QSpinBox, QPushButton, QTableWidget, QTableWidgetItem,
+                            QFileDialog, QComboBox, QAbstractItemView, QCheckBox,
+                            QHeaderView, QRadioButton)
+from qtpy.QtGui import QPixmap, QFont
+from qtpy.QtCore import Qt, QSize
 from .degree_of_radiality import compute_degree_of_radiality
+from pathlib import Path
+from napari.qt.threading import thread_worker
+from napari.settings import get_settings
 
+# From: https://github.com/volume-em/empanada-napari/blob/main/empanada_napari/utils.py
+def abspath(root, relpath):
+    root = Path(root)
+    if root.is_dir():
+        path = root/relpath
+    else:
+        path = root.parent/relpath
+    return str(path.absolute())
 
 class RadialityPlotter(QWidget):
     def __init__(self, napari_viewer):
@@ -30,6 +46,62 @@ class RadialityPlotter(QWidget):
         self.results_table = QTableWidget(self)
         self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.layout().addWidget(self.results_table)
+
+        self.vector_field_choice_container = QWidget()
+        self.vector_field_choice_container.setLayout(QVBoxLayout())
+
+        header_container = QWidget()
+        header_container.setLayout(QHBoxLayout())
+        for header_name in ['Pattern', 'Numerator', 'Denominator']:
+            header_label = QLabel()
+            header_label.setText(header_name)
+            header_label.setFont(QFont('Arial', 10, weight=QFont.Bold))
+            header_container.layout().addWidget(header_label)
+
+        self.btn_container = QWidget()
+        self.btn_container.setLayout(QHBoxLayout())
+        self.button_name_list = ['Radial', 'Horizontal', 'Vertical', 'Tangential', 'Random']
+
+        self.icon_img_placeholder = QWidget()
+        self.icon_img_placeholder.setLayout(QVBoxLayout())
+        self.icon_size_inner = QSize(40, 40)
+        self.icon_size_outer = QSize(45, 45)
+        self._update_vec_field_icons()
+
+        self._viewer.events.theme.connect(self._update_vec_field_icons)
+
+        numerator_buttons = []
+        for button_name in self.button_name_list:
+            numerator_buttons.append(QRadioButton(button_name))
+        numerator_btn_container = QWidget()
+        numerator_btn_container.setLayout(QVBoxLayout())
+        for button in numerator_buttons:
+            button.toggled.connect(lambda __, button=button: self._numerator_button_state_setter(button))
+            numerator_btn_container.layout().addWidget(button)
+
+        denominator_buttons = []
+        for button_name in self.button_name_list:
+            denominator_buttons.append(QRadioButton(button_name))
+        denominator_btn_container = QWidget()
+        denominator_btn_container.setLayout(QVBoxLayout())
+        for button in denominator_buttons:
+            button.toggled.connect(lambda __, button=button: self._denominator_button_state_setter(button))
+            denominator_btn_container.layout().addWidget(button)
+
+        self.btn_container.layout().addWidget(self.icon_img_placeholder)
+        self.btn_container.layout().addWidget(numerator_btn_container)
+        self.btn_container.layout().addWidget(denominator_btn_container)
+
+        self.vector_field_choice_container.layout().addWidget(header_container)
+        self.vector_field_choice_container.layout().addWidget(self.btn_container)
+
+        self.layout().addWidget(self.vector_field_choice_container)
+        self.vector_field_choice_container.hide()
+
+        vec_field_checkbox = QCheckBox('Choose vector field patterns', self)
+        vec_field_checkbox.setChecked(False)
+        vec_field_checkbox.stateChanged.connect(self._on_vec_field_checkbox_changed)
+        self.layout().addWidget(vec_field_checkbox)
 
         num_slices_container = QWidget()
         num_slices_container.setLayout(QHBoxLayout())
@@ -63,7 +135,6 @@ class RadialityPlotter(QWidget):
         self.layout().addWidget(label_input_container)
 
         self._viewer.layers.events.inserted.connect(self._update_combo_boxes)
-        # Need to clean up list of combobox
         self._viewer.layers.events.removed.connect(self._update_combo_boxes)
 
         btn_compute = QPushButton("Compute")
@@ -78,11 +149,58 @@ class RadialityPlotter(QWidget):
         clear_button.clicked.connect(self._reset_widgets)
         self.layout().addWidget(clear_button)
 
-        self._reset_table()
+        self._max_slice_counter = 0
+
+        self._update_table()
         self. _update_combo_boxes()
         self._analysis_counter = 0
 
-        self.colour_list = ['red', 'green', 'blue', 'yellow']
+        colormap = pg.colormap.getFromMatplotlib('tab10')
+        self.colors_list = colormap.getColors()
+
+        numerator_buttons[0].setChecked(True)
+        denominator_buttons[3].setChecked(True)
+
+        self._numerator_button_state = 'Radial'
+        self._denominator_button_state = 'Tangential'
+
+    def _update_vec_field_icons(self, *args):
+        if len(args) > 0:
+            self.icon_img_placeholder.layout().removeWidget(self.icon_img_container)
+            self.icon_img_container.close()
+
+        self.icon_img_container = QWidget()
+        self.icon_img_container.setLayout(QVBoxLayout())
+
+        theme_name = get_settings().appearance.theme
+        if theme_name == 'system':
+            theme_name = 'light'
+        for button_name in self.button_name_list:
+            im_path = abspath(__file__, f'icon_images/{button_name}_{theme_name}.png')
+            icon_img = QPixmap(im_path)
+            icon_img = icon_img.scaled(self.icon_size_inner, Qt.KeepAspectRatio, transformMode=Qt.SmoothTransformation)
+            icon_label = QLabel()
+            icon_label.setPixmap(icon_img)
+            icon_label.setFixedSize(self.icon_size_outer.width(), self.icon_size_outer.height())
+            self.icon_img_container.layout().addWidget(icon_label)
+            
+        self.icon_img_placeholder.layout().addWidget(self.icon_img_container)
+
+        if len(args) > 0:
+            self.icon_img_placeholder.update()
+
+    def _on_vec_field_checkbox_changed(self, value):
+        state = Qt.CheckState(value)
+        if state == Qt.CheckState.Checked:
+            self.vector_field_choice_container.show()
+        elif state == Qt.CheckState.Unchecked:
+            self.vector_field_choice_container.hide()
+
+    def _numerator_button_state_setter(self, btn):
+        self._numerator_button_state = btn.text()
+
+    def _denominator_button_state_setter(self, btn):
+        self._denominator_button_state = btn.text()
 
     def _update_combo_boxes(self):
         for layer_name in [self._image_layers.itemText(i) for i in range(self._image_layers.count())]:
@@ -100,8 +218,15 @@ class RadialityPlotter(QWidget):
 
     def _reset_widgets(self):
         self._analysis_counter = 0
+        self._max_slice_counter = 0
         self._reset_plot()
-        self._reset_table()
+        self._update_table(reset_table=True)
+
+    def _update_max_slice_counter(self, val):
+        if val > self._max_slice_counter:
+            self._max_slice_counter = val
+        else:
+            pass
 
     def _save_table(self):
         path, ok = QFileDialog.getSaveFileName(
@@ -127,18 +252,29 @@ class RadialityPlotter(QWidget):
     def _compute(self):
         selected_image = self.selected_image_layer()
         selected_label = self.selected_label_layer()
-        # for images, color in zip(selected_images, ['red', 'green']): #Use cmap to choose colours
-        self.plot_radiality(selected_image.data, selected_label.data if selected_label else selected_label, self.colour_list[self._analysis_counter], selected_image.name) #Add color_counter to add new colour for new analysis
-        self._analysis_counter += 1
-        
-    def plot_radiality(self, images, labels, color='red', name='line1', show_mean=True):
-        num_of_slices = self._sp_num_slices.value()
-        degree_of_radiality, dor_images, cell_labels = compute_degree_of_radiality(images, labels, num_of_slices)
+        self.plot_radiality(images=selected_image,
+                            labels=selected_label.data if selected_label else selected_label,
+                            color=self.colors_list[self._analysis_counter], #loop over to first index when max colours reached (use modulo)
+                            name=selected_image.name)
 
+        self._analysis_counter += 1
+
+    # @thread_worker
+    def plot_radiality(self, images, labels, color, name='line1', show_mean=True):
+        num_of_slices = self._sp_num_slices.value()
+        num_vec_name = self._numerator_button_state
+        den_vec_name = self._denominator_button_state
+
+        self._update_max_slice_counter(num_of_slices)
+        degree_of_radiality, dor_images, cell_labels, im_paths = compute_degree_of_radiality(images,
+                                                                                             labels,
+                                                                                             num_of_slices,
+                                                                                             num_vec_name,
+                                                                                             den_vec_name)
         if labels == None:
             self._viewer.add_labels(cell_labels, name=f'Cell Segmentation {name}')
 
-        self._update_table(degree_of_radiality=degree_of_radiality, folder_name=name)
+        self._update_table(degree_of_radiality=degree_of_radiality, folder_name=name, im_paths=im_paths)
 
         self.graph.addLegend()
         if show_mean:
@@ -146,29 +282,31 @@ class RadialityPlotter(QWidget):
             std_dor = np.std(degree_of_radiality, axis=0)
 
             x = np.array([i for i in range(1, num_of_slices + 1)])
-            y = mean_dor
-            top = np.array([val + error for (val, error) in zip(np.nditer(mean_dor), np.nditer(std_dor))])
-            bottom = np.array([val - error for (val, error) in zip(np.nditer(mean_dor), np.nditer(std_dor))])
 
-            error = pg.ErrorBarItem(x=x, y=y, top=top, bottom=bottom, beam=0.1, pen=color)
+            error = pg.ErrorBarItem(x=x, y=mean_dor, height=std_dor, beam=0.1, pen=color)
             self.graph.addItem(error)
             self.graph.plot(x,y, pen=color, name=name)
 
-    def _reset_table(self):
-        self.results_table.setColumnCount(self._sp_num_slices.value() + 1)
-        self.results_table.setRowCount(0)
-        self.results_table.setHorizontalHeaderLabels(['Folder name'] + [f'Section {i}' for i in range(1, self._sp_num_slices.value() + 1)])
-
     def _update_table(self, **kwargs):
-        self.results_table.setColumnCount(self._sp_num_slices.value() + 1)
-        self.results_table.setHorizontalHeaderLabels(['Folder name'] + [f'Section {i}' for i in range(1, self._sp_num_slices.value() + 1)])
-        # self.results_table.setRowCount(kwargs['degree_of_radiality'].shape[0])
-        # if 'degree_of_radiality' in kwargs:
-        for row_val in kwargs['degree_of_radiality']:
-            self.results_table.insertRow(self.results_table.rowCount())
-            for col, col_val in enumerate(row_val):
+        self.results_table.setColumnCount(self._max_slice_counter + 2)
+        if 'reset_table' in kwargs:
+            if kwargs['reset_table'] == True:
+                self.results_table.setRowCount(0)
+
+        if 'degree_of_radiality' in kwargs:
+            for row, row_val in enumerate(kwargs['degree_of_radiality']):
+                self.results_table.insertRow(self.results_table.rowCount())
                 self.results_table.setItem(self.results_table.rowCount()-1, 0, QTableWidgetItem(kwargs['folder_name']))
-                self.results_table.setItem(self.results_table.rowCount()-1, col + 1, QTableWidgetItem(str(col_val)))
+                self.results_table.setItem(self.results_table.rowCount()-1, 1, QTableWidgetItem(kwargs['im_paths'][row]))
+                for col, col_val in enumerate(row_val):
+                    self.results_table.setItem(self.results_table.rowCount()-1, col + 2, QTableWidgetItem(str(col_val)))
+
+        for col in range(1, self._max_slice_counter + 1):
+            self.results_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
+            self.results_table.horizontalHeader().setSectionsClickable(True)
+
+        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.setHorizontalHeaderLabels(['Folder name', 'Image name'] + [f'Section {i}' for i in range(1, self._max_slice_counter + 1)])
 
     def selected_image_layer(self):
         return self._viewer.layers[self._image_layers.currentText()] # Need to force images to be grayscale in case other readers used!

@@ -60,14 +60,15 @@ def reader_function(path):
     """
 
     if os.path.isdir(path):
-        _paths = glob.glob(os.path.join(path, '*.png')) + glob.glob(os.path.join(path, '*.tif')) + glob.glob(os.path.join(path, '*.tiff'))
-        array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in _paths]
+        _paths = sorted(glob.glob(os.path.join(path, '*.png')) + glob.glob(os.path.join(path, '*.tif')) + glob.glob(os.path.join(path, '*.tiff')))
+        array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in sorted(_paths)]
         data = np.squeeze(np.stack(array))
 
-        # _path_dict =
+        metadata_dict = dict()
+        metadata_dict['file_paths'] = [os.path.basename(p) for p in _paths]
 
-        # add_kwargs = {"name": os.path.basename(path), "metadata":}
-        add_kwargs = {"name": os.path.basename(path)}
+        add_kwargs = {"name": os.path.basename(path), "metadata": metadata_dict}
+        # add_kwargs = {"name": os.path.basename(path)}
 
         layer_type = "image"
     else:
