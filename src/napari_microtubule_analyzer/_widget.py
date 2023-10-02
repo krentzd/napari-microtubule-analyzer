@@ -183,7 +183,7 @@ class RadialityPlotter(QWidget):
             icon_label.setPixmap(icon_img)
             icon_label.setFixedSize(self.icon_size_outer.width(), self.icon_size_outer.height())
             self.icon_img_container.layout().addWidget(icon_label)
-            
+
         self.icon_img_placeholder.layout().addWidget(self.icon_img_container)
 
         if len(args) > 0:
@@ -285,7 +285,7 @@ class RadialityPlotter(QWidget):
 
             error = pg.ErrorBarItem(x=x, y=mean_dor, height=std_dor, beam=0.1, pen=color)
             self.graph.addItem(error)
-            self.graph.plot(x,y, pen=color, name=name)
+            self.graph.plot(x,y=mean_dor, pen=color, name=name)
 
     def _update_table(self, **kwargs):
         self.results_table.setColumnCount(self._max_slice_counter + 2)
