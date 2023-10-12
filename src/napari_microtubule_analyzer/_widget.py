@@ -14,6 +14,7 @@ from qtpy.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
 from qtpy.QtGui import QPixmap, QFont
 from qtpy.QtCore import Qt, QSize
 from .degree_of_radiality import compute_degree_of_radiality
+from .skewness import compute_skewness
 from pathlib import Path
 from napari.qt.threading import thread_worker
 from napari.settings import get_settings
@@ -105,7 +106,7 @@ class RadialityPlotter(QWidget):
 
         num_slices_container = QWidget()
         num_slices_container.setLayout(QHBoxLayout())
-        label = QLabel('Number of slices')
+        label = QLabel('Number of cell subsections')
         num_slices_container.layout().addWidget(label)
         self._sp_num_slices = QSpinBox()
         self._sp_num_slices.setMinimum(1)
@@ -117,7 +118,7 @@ class RadialityPlotter(QWidget):
 
         image_input_container = QWidget()
         image_input_container.setLayout(QHBoxLayout())
-        image_input_label = QLabel('Image stack')
+        image_input_label = QLabel('Cell image stack')
         image_input_container.layout().addWidget(image_input_label)
         self._image_layers = QComboBox(self)
         image_input_container.layout().addWidget(self._image_layers)
@@ -136,6 +137,17 @@ class RadialityPlotter(QWidget):
 
         self._viewer.layers.events.inserted.connect(self._update_combo_boxes)
         self._viewer.layers.events.removed.connect(self._update_combo_boxes)
+
+        metric_container = QWidget()
+        metric_container.setLayout(QHBoxLayout())
+        metric_label = QLabel('Metric')
+        metric_container.layout().addWidget(metric_label)
+        self._metric = QComboBox(self)
+        for metric_item in ['Degree of Radiality', 'Skewness']:
+            self._metric.addItem(metric_item)
+        metric_container.layout().addWidget(self._metric)
+        metric_container.layout().setSpacing(0)
+        self.layout().addWidget(metric_container)
 
         btn_compute = QPushButton("Compute")
         btn_compute.clicked.connect(self._compute)
@@ -252,34 +264,45 @@ class RadialityPlotter(QWidget):
     def _compute(self):
         selected_image = self.selected_image_layer()
         selected_label = self.selected_label_layer()
-        self.plot_radiality(images=selected_image,
-                            labels=selected_label.data if selected_label else selected_label,
-                            color=self.colors_list[self._analysis_counter], #loop over to first index when max colours reached (use modulo)
-                            name=selected_image.name)
+        self.plot_metrics(images=selected_image,
+                          labels=selected_label.data if selected_label else selected_label,
+                          color=self.colors_list[self._analysis_counter], #loop over to first index when max colours reached (use modulo)
+                          name=selected_image.name)
 
         self._analysis_counter += 1
 
     # @thread_worker
-    def plot_radiality(self, images, labels, color, name='line1', show_mean=True):
+    def plot_metrics(self, images, labels, color, name='line1', show_mean=True):
         num_of_slices = self._sp_num_slices.value()
-        num_vec_name = self._numerator_button_state
-        den_vec_name = self._denominator_button_state
-
         self._update_max_slice_counter(num_of_slices)
-        degree_of_radiality, dor_images, cell_labels, im_paths = compute_degree_of_radiality(images,
-                                                                                             labels,
-                                                                                             num_of_slices,
-                                                                                             num_vec_name,
-                                                                                             den_vec_name)
+
+        if self._metric.currentText() == 'Degree of Radiality':
+            num_vec_name = self._numerator_button_state
+            den_vec_name = self._denominator_button_state
+
+            results, dor_images, cell_labels, im_paths = compute_degree_of_radiality(images,
+                                                                                     labels,
+                                                                                     num_of_slices,
+                                                                                     num_vec_name,
+                                                                                     den_vec_name)
+
+            self._viewer.add_image(dor_images[0], name=f'Numerator Directionality {name}', colormap='magma')
+            self._viewer.add_image(dor_images[1], name=f'Denominator Directionality {name}', colormap='magma')
+
+        elif self._metric.currentText() == 'Skewness':
+            results, cell_labels, im_paths = compute_skewness(images,
+                                                              labels,
+                                                              num_of_slices)
+
         if labels == None:
             self._viewer.add_labels(cell_labels, name=f'Cell Segmentation {name}')
 
-        self._update_table(degree_of_radiality=degree_of_radiality, folder_name=name, im_paths=im_paths)
+        self._update_table(results=results, folder_name=name, im_paths=im_paths, metric=self._metric.currentText())
 
         self.graph.addLegend()
         if show_mean:
-            mean_dor = np.mean(degree_of_radiality, axis=0)
-            std_dor = np.std(degree_of_radiality, axis=0)
+            mean_dor = np.mean(results, axis=0)
+            std_dor = np.std(results, axis=0)
 
             x = np.array([i for i in range(1, num_of_slices + 1)])
             y = mean_dor
@@ -288,25 +311,26 @@ class RadialityPlotter(QWidget):
             self.graph.plot(x,y, pen=color, name=name)
 
     def _update_table(self, **kwargs):
-        self.results_table.setColumnCount(self._max_slice_counter + 2)
+        self.results_table.setColumnCount(self._max_slice_counter + 3)
         if 'reset_table' in kwargs:
             if kwargs['reset_table'] == True:
                 self.results_table.setRowCount(0)
 
-        if 'degree_of_radiality' in kwargs:
-            for row, row_val in enumerate(kwargs['degree_of_radiality']):
+        if 'results' in kwargs:
+            for row, row_val in enumerate(kwargs['results']):
                 self.results_table.insertRow(self.results_table.rowCount())
                 self.results_table.setItem(self.results_table.rowCount()-1, 0, QTableWidgetItem(kwargs['folder_name']))
                 self.results_table.setItem(self.results_table.rowCount()-1, 1, QTableWidgetItem(kwargs['im_paths'][row]))
+                self.results_table.setItem(self.results_table.rowCount()-1, 2, QTableWidgetItem(kwargs['metric']))
                 for col, col_val in enumerate(row_val):
-                    self.results_table.setItem(self.results_table.rowCount()-1, col + 2, QTableWidgetItem(str(col_val)))
+                    self.results_table.setItem(self.results_table.rowCount()-1, col + 3, QTableWidgetItem(str(col_val)))
 
         for col in range(1, self._max_slice_counter + 1):
             self.results_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.Stretch)
             self.results_table.horizontalHeader().setSectionsClickable(True)
 
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.results_table.setHorizontalHeaderLabels(['Folder name', 'Image name'] + [f'Section {i}' for i in range(1, self._max_slice_counter + 1)])
+        self.results_table.setHorizontalHeaderLabels(['Folder name', 'Image name', 'Metric'] + [f'Section {i}' for i in range(1, self._max_slice_counter + 1)])
 
     def selected_image_layer(self):
         return self._viewer.layers[self._image_layers.currentText()] # Need to force images to be grayscale in case other readers used!

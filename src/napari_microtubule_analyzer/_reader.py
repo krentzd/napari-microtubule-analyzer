@@ -9,6 +9,7 @@ import numpy as np
 import cv2 as cv
 import os
 import glob
+import tifffile
 
 def napari_get_reader(path):
     """A basic implementation of a Reader contribution.
@@ -61,7 +62,11 @@ def reader_function(path):
 
     if os.path.isdir(path):
         _paths = sorted(glob.glob(os.path.join(path, '*.png')) + glob.glob(os.path.join(path, '*.tif')) + glob.glob(os.path.join(path, '*.tiff')))
-        array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in sorted(_paths)]
+        # try:
+        # array = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in sorted(_paths)]
+        # except ValueError:
+        array = [tifffile.imread(_path) for _path in sorted(_paths)]
+
         data = np.squeeze(np.stack(array))
 
         metadata_dict = dict()

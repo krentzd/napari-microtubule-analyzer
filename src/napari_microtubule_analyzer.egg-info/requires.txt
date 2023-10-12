@@ -1,6 +1,16 @@
+setuptools
+packaging
 numpy
 magicgui
 qtpy
+opencv-python
+matplotlib
+scikit-image
+tqdm
+tifffile
+scipy
+pyefd
+pyqtgraph
 
 [testing]
 tox

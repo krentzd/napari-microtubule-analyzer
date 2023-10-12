@@ -3,6 +3,7 @@ MANIFEST.in
 README.md
 pyproject.toml
 setup.cfg
+setup.py
 src/napari_microtubule_analyzer/__init__.py
 src/napari_microtubule_analyzer/_reader.py
 src/napari_microtubule_analyzer/_widget.py
@@ -13,6 +14,8 @@ src/napari_microtubule_analyzer/make_orientation.py
 src/napari_microtubule_analyzer/make_structure_tensor_2d.py
 src/napari_microtubule_analyzer/make_vxvy.py
 src/napari_microtubule_analyzer/napari.yaml
+src/napari_microtubule_analyzer/skewness.py
+src/napari_microtubule_analyzer/utils.py
 src/napari_microtubule_analyzer.egg-info/PKG-INFO
 src/napari_microtubule_analyzer.egg-info/SOURCES.txt
 src/napari_microtubule_analyzer.egg-info/dependency_links.txt
@@ -23,3 +26,13 @@ src/napari_microtubule_analyzer/_tests/__init__.py
 src/napari_microtubule_analyzer/_tests/test_reader.py
 src/napari_microtubule_analyzer/_tests/test_widget.py
 src/napari_microtubule_analyzer/_tests/test_writer.py
+src/napari_microtubule_analyzer/icon_images/Horizontal_dark.png
+src/napari_microtubule_analyzer/icon_images/Horizontal_light.png
+src/napari_microtubule_analyzer/icon_images/Radial_dark.png
+src/napari_microtubule_analyzer/icon_images/Radial_light.png
+src/napari_microtubule_analyzer/icon_images/Random_dark.png
+src/napari_microtubule_analyzer/icon_images/Random_light.png
+src/napari_microtubule_analyzer/icon_images/Tangential_dark.png
+src/napari_microtubule_analyzer/icon_images/Tangential_light.png
+src/napari_microtubule_analyzer/icon_images/Vertical_dark.png
+src/napari_microtubule_analyzer/icon_images/Vertical_light.png

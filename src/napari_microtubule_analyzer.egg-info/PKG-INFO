@@ -1,10 +1,10 @@
 Metadata-Version: 2.1
 Name: napari-microtubule-analyzer
-Version: 0.0.1
+Version: 0.0.1a5
 Summary: A plugin to analyze microtubule organization
 Home-page: https://github.com/krentzd/napari-microtubule-analyzer
 Author: Daniel Krentzel
-Author-email: daniel.krentzel@pasteur.fr
+Author-email: dkrentzel@pm.me
 License: MIT
 Project-URL: Bug Tracker, https://github.com/krentzd/napari-microtubule-analyzer/issues
 Project-URL: Documentation, https://github.com/krentzd/napari-microtubule-analyzer#README.md
@@ -24,17 +24,8 @@ Classifier: Programming Language :: Python :: 3.10
 Classifier: Topic :: Scientific/Engineering :: Image Processing
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
-License-File: LICENSE
-Requires-Dist: numpy
-Requires-Dist: magicgui
-Requires-Dist: qtpy
 Provides-Extra: testing
-Requires-Dist: tox; extra == "testing"
-Requires-Dist: pytest; extra == "testing"
-Requires-Dist: pytest-cov; extra == "testing"
-Requires-Dist: pytest-qt; extra == "testing"
-Requires-Dist: napari; extra == "testing"
-Requires-Dist: pyqt5; extra == "testing"
+License-File: LICENSE
 
 # napari-microtubule-analyzer
 
