@@ -7,7 +7,7 @@ import numpy as np
 import os
 import csv
 import pyqtgraph as pg
-from qtpy.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
+from qtpy.QtWidgets import (QWidget, QTabWidget, QHBoxLayout, QVBoxLayout, QLabel,
                             QSpinBox, QPushButton, QTableWidget, QTableWidgetItem,
                             QFileDialog, QComboBox, QAbstractItemView, QCheckBox,
                             QHeaderView, QRadioButton)
@@ -15,18 +15,13 @@ from qtpy.QtGui import QPixmap, QFont
 from qtpy.QtCore import Qt, QSize
 from .degree_of_radiality import compute_degree_of_radiality
 from .skewness import compute_skewness
-from pathlib import Path
 from napari.qt.threading import thread_worker
 from napari.settings import get_settings
+from .utils import abspath
 
-# From: https://github.com/volume-em/empanada-napari/blob/main/empanada_napari/utils.py
-def abspath(root, relpath):
-    root = Path(root)
-    if root.is_dir():
-        path = root/relpath
-    else:
-        path = root.parent/relpath
-    return str(path.absolute())
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
 
 class RadialityPlotter(QWidget):
     def __init__(self, napari_viewer):
@@ -35,6 +30,9 @@ class RadialityPlotter(QWidget):
 
         graph_container = QWidget()
 
+        results_tab_widget = QTabWidget()
+
+
         self._graphics_widget = pg.GraphicsLayoutWidget()
         self._graphics_widget.setBackground(None)
 
@@ -42,11 +40,18 @@ class RadialityPlotter(QWidget):
         graph_container.layout().addWidget(self._graphics_widget)
         self.graph = self._graphics_widget.addPlot()
         self.setLayout(QVBoxLayout())
-        self.layout().addWidget(graph_container)
+        # self.layout().addWidget(graph_container)
 
         self.results_table = QTableWidget(self)
         self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.layout().addWidget(self.results_table)
+
+        self.results_table.cellClicked.connect(self._switch_view_to_selected_row)
+
+        # self.layout().addWidget(self.results_table)
+
+        results_tab_widget.addTab(graph_container, "Graph")
+        results_tab_widget.addTab(self.results_table, "Table")
+        self.layout().addWidget(results_tab_widget)
 
         self.vector_field_choice_container = QWidget()
         self.vector_field_choice_container.setLayout(QVBoxLayout())
@@ -148,6 +153,19 @@ class RadialityPlotter(QWidget):
         metric_container.layout().addWidget(self._metric)
         metric_container.layout().setSpacing(0)
         self.layout().addWidget(metric_container)
+
+        window_size_container = QWidget()
+        window_size_container.setLayout(QHBoxLayout())
+        window_size_label = QLabel('Window size')
+        window_size_container.layout().addWidget(window_size_label)
+        self._window_size = QSpinBox(self)
+        self._window_size.setMinimum(1)
+        self._window_size.setMaximum(100)
+        self._window_size.setValue(1)
+        self._window_size.setSingleStep(1)
+        window_size_container.layout().addWidget(self._window_size)
+        window_size_container.layout().setSpacing(0)
+        self.layout().addWidget(window_size_container)
 
         btn_compute = QPushButton("Compute")
         btn_compute.clicked.connect(self._compute)
@@ -271,10 +289,14 @@ class RadialityPlotter(QWidget):
 
         self._analysis_counter += 1
 
-    # @thread_worker
     def plot_metrics(self, images, labels, color, name='line1', show_mean=True):
         num_of_slices = self._sp_num_slices.value()
         self._update_max_slice_counter(num_of_slices)
+        window_size = self._window_size.value()
+
+        #Check if file paths included in stack
+        if 'file_paths' not in images.metadata.keys():
+            images.metadata['file_paths'] = [f'Image {i}' for i in range(images.data.shape[0])]
 
         if self._metric.currentText() == 'Degree of Radiality':
             num_vec_name = self._numerator_button_state
@@ -284,7 +306,8 @@ class RadialityPlotter(QWidget):
                                                                                      labels,
                                                                                      num_of_slices,
                                                                                      num_vec_name,
-                                                                                     den_vec_name)
+                                                                                     den_vec_name,
+                                                                                     window_size)
 
             self._viewer.add_image(dor_images[0], name=f'Numerator Directionality {name}', colormap='magma')
             self._viewer.add_image(dor_images[1], name=f'Denominator Directionality {name}', colormap='magma')
@@ -347,3 +370,14 @@ class RadialityPlotter(QWidget):
             self.graph = self._graphics_widget.addPlot()
         else:
             self.graph.clear()
+
+    # If still in viewer, switch viewer to specified image
+    def _switch_view_to_selected_row(self, row, column):
+        # Verify chosen image still in layers
+        selected_layer = self.results_table.item(row, 0).text()
+        available_layers = [self._image_layers.itemText(i) for i in range(self._image_layers.count())]
+        if selected_layer in available_layers:
+            # Find index of specified image
+            selected_image_path = self.results_table.item(row, 1).text()
+            dim_position = self._viewer.layers[selected_layer].metadata['file_paths'].index(selected_image_path)
+            self._viewer.dims.current_step = (dim_position,) + self._viewer.dims.current_step[1:]

@@ -8,13 +8,19 @@ contributions:
     - id: napari-microtubule-analyzer.degree_of_radiality
       python_name: napari_microtubule_analyzer._widget:RadialityPlotter
       title: Make DoR widget
-
+    - id: napari-microtubule-analyzer.sample_data
+      title: siAPC
+      python_name: napari_microtubule_analyzer.sample_data:make_sample_data
   readers:
   - command: napari-microtubule-analyzer.get_reader
     filename_patterns:
     - '*.tif'
     - '*.tiff'
     accepts_directories: true
+  sample_data:
+  - command: napari-microtubule-analyzer.sample_data
+    display_name: Sample siRNA data
+    key: sample_siRNA.1
   widgets:
     - command: napari-microtubule-analyzer.degree_of_radiality
-      display_name: Compute degree of radiality
+      display_name: Microtubule Analyzer

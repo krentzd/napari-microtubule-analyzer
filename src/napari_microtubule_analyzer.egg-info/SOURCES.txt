@@ -14,6 +14,7 @@ src/napari_microtubule_analyzer/make_orientation.py
 src/napari_microtubule_analyzer/make_structure_tensor_2d.py
 src/napari_microtubule_analyzer/make_vxvy.py
 src/napari_microtubule_analyzer/napari.yaml
+src/napari_microtubule_analyzer/sample_data.py
 src/napari_microtubule_analyzer/skewness.py
 src/napari_microtubule_analyzer/utils.py
 src/napari_microtubule_analyzer.egg-info/PKG-INFO

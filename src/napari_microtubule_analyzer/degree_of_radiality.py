@@ -9,7 +9,7 @@ from .utils import (segment_and_separate_cells_with_centrosome,
                     get_mean_abs_dot_product, get_area_mask, get_efd,
                     get_vector_field)
 
-def compute_degree_of_radiality(im_stack, label_stack, num_of_slices, numerator_vec_name, denominator_vec_name):
+def compute_degree_of_radiality(im_stack, label_stack, num_of_slices, numerator_vec_name, denominator_vec_name, window_size):
     dor_list = []
     im_path_list = []
     stripwise_radial_im_list = []
@@ -45,7 +45,7 @@ def compute_degree_of_radiality(im_stack, label_stack, num_of_slices, numerator_
         strip_mask = np.zeros_like(im)
         stripwise_radial_im_sum = np.zeros_like(im)
         stripwise_tangential_im_sum = np.zeros_like(im)
-        
+
         if with_centrosome:
             vecs_per_img = np.zeros((im.shape[1], im.shape[2], 3), dtype='float64')
         else:
@@ -88,7 +88,7 @@ def compute_degree_of_radiality(im_stack, label_stack, num_of_slices, numerator_
                                      num_contours=num_of_slices,
                                      num_points=5000)
                 efd_recons.reverse()
-                vecs = get_vector_field(img, chull, (x_min, x_max), (y_min, y_max))
+                vecs = get_vector_field(img, chull, (x_min, x_max), (y_min, y_max), window_size)
                 # Need to specify x and y position, as well as slice position with 3rd dimension
                 vecs_per_img[x_min:x_max, y_min:y_max, 1] += vecs[1]
                 vecs_per_img[x_min:x_max, y_min:y_max, 2] += vecs[0]

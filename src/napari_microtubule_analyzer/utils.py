@@ -23,12 +23,22 @@ import matplotlib.colors as mcolors
 import random
 import matplotlib
 import matplotlib.gridspec as gridspec
+from pathlib import Path
 
 from .make_coherence import *
 from .make_image_gradients import *
 from .make_orientation import *
 from .make_structure_tensor_2d import *
 from .make_vxvy import *
+
+# From: https://github.com/volume-em/empanada-napari/blob/main/empanada_napari/utils.py
+def abspath(root, relpath):
+    root = Path(root)
+    if root.is_dir():
+        path = root/relpath
+    else:
+        path = root.parent/relpath
+    return str(path.absolute())
 
 def tuple_mean(t1, t2, w=(0.5, 0.5)):
     t_a = w[0] * t1[0] + w[1] * t2[0]
@@ -201,11 +211,11 @@ def make_tangential_vectors(centroid, chull, x_range, y_range):
 
     return vx, vy
 
-def get_vector_field(img, chull, x_range, y_range):
+def get_vector_field(img, chull, x_range, y_range, window_size):
     img = img[x_range[0]:x_range[1], y_range[0]:y_range[1]]
 
     image_filter_sigma = 0.1
-    local_sigma = 1
+    local_sigma = window_size
 
     threshold_value = max(int(0.5 * np.median(img)), 2)
 

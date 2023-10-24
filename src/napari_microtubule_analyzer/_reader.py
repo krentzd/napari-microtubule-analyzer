@@ -76,11 +76,18 @@ def reader_function(path):
         # add_kwargs = {"name": os.path.basename(path)}
 
         layer_type = "image"
+
     else:
+        print(path)
         paths = [path] if isinstance(path, str) else path
-        arrays = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in paths]
+        # arrays = [cv.imread(_path, cv.IMREAD_GRAYSCALE) for _path in paths]
+        arrays = [tifffile.imread(_path) for _path in paths]
         data = np.squeeze(np.stack(arrays))
 
-        add_kwargs = {}
+        metadata_dict = dict()
+        metadata_dict['file_paths'] = [os.path.basename(p) for p in paths]
+
+        add_kwargs = {"name": os.path.basename(path), "metadata": metadata_dict}
         layer_type = "image"
+
     return [(data, add_kwargs, layer_type)]
