@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: napari-microtubule-analyzer
-Version: 0.0.1a6
+Version: 0.0.1a7
 Summary: A plugin to analyze microtubule organization
 Home-page: https://github.com/krentzd/napari-microtubule-analyzer
 Author: Daniel Krentzel

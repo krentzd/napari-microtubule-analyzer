@@ -123,7 +123,7 @@ class RadialityPlotter(QWidget):
 
         image_input_container = QWidget()
         image_input_container.setLayout(QHBoxLayout())
-        image_input_label = QLabel('Cell image stack')
+        image_input_label = QLabel('Cell images')
         image_input_container.layout().addWidget(image_input_label)
         self._image_layers = QComboBox(self)
         image_input_container.layout().addWidget(self._image_layers)
@@ -133,7 +133,7 @@ class RadialityPlotter(QWidget):
         ### If 'No labels' selected, then show dropdown of segmentation algorithms from skimage##
         label_input_container = QWidget()
         label_input_container.setLayout(QHBoxLayout())
-        label_input_label = QLabel('Cell segmentation stack')
+        label_input_label = QLabel('Cell segmentations (optional)')
         label_input_container.layout().addWidget(label_input_label)
         self._label_layers = QComboBox(self)
         label_input_container.layout().addWidget(self._label_layers)
@@ -156,7 +156,7 @@ class RadialityPlotter(QWidget):
 
         window_size_container = QWidget()
         window_size_container.setLayout(QHBoxLayout())
-        window_size_label = QLabel('Window size')
+        window_size_label = QLabel('Size of Gaussian observation window (pixels)')
         window_size_container.layout().addWidget(window_size_label)
         self._window_size = QSpinBox(self)
         self._window_size.setMinimum(1)
